@@ -1,14 +1,15 @@
 package pgadapter
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
-	"github.com/go-pg/pg/v9"
-	"github.com/go-pg/pg/v9/orm"
-	"github.com/go-pg/pg/v9/types"
+	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
+	"github.com/go-pg/pg/v10/types"
 	"github.com/mmcloughlin/meow"
 )
 
@@ -66,9 +67,9 @@ func NewAdapterByDB(db *pg.DB, opts ...Option) (*Adapter, error) {
 	}
 
 	if len(a.tableName) > 0 {
-		a.db.Model((*CasbinRule)(nil)).TableModel().Table().Name = a.tableName
-		a.db.Model((*CasbinRule)(nil)).TableModel().Table().FullName = (types.Safe)(a.tableName)
-		a.db.Model((*CasbinRule)(nil)).TableModel().Table().FullNameForSelects = (types.Safe)(a.tableName)
+		a.db.Model((*CasbinRule)(nil)).TableModel().Table().ModelName = a.tableName
+		a.db.Model((*CasbinRule)(nil)).TableModel().Table().SQLName = (types.Safe)(a.tableName)
+		a.db.Model((*CasbinRule)(nil)).TableModel().Table().SQLNameForSelects = (types.Safe)(a.tableName)
 	}
 
 	if !a.skipTableCreate {
@@ -130,7 +131,7 @@ func (a *Adapter) Close() error {
 }
 
 func (a *Adapter) createTableifNotExists() error {
-	err := a.db.CreateTable(&CasbinRule{}, &orm.CreateTableOptions{
+	err := a.db.Model(&CasbinRule{}).CreateTable(&orm.CreateTableOptions{
 		Temp:        false,
 		IfNotExists: true,
 	})
@@ -279,7 +280,7 @@ func (a *Adapter) SavePolicy(model model.Model) error {
 // AddPolicy adds a policy rule to the storage.
 func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 	line := savePolicyLine(ptype, rule)
-	err := a.db.RunInTransaction(func(tx *pg.Tx) error {
+	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
 		_, err := a.db.Model(line).
 			OnConflict("DO NOTHING").
 			Insert()
@@ -298,7 +299,7 @@ func (a *Adapter) AddPolicies(sec string, ptype string, rules [][]string) error 
 		lines = append(lines, line)
 	}
 
-	err := a.db.RunInTransaction(func(tx *pg.Tx) error {
+	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
 		_, err := tx.Model(&lines).
 			OnConflict("DO NOTHING").
 			Insert()
@@ -311,8 +312,9 @@ func (a *Adapter) AddPolicies(sec string, ptype string, rules [][]string) error 
 // RemovePolicy removes a policy rule from the storage.
 func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	line := savePolicyLine(ptype, rule)
-	err := a.db.RunInTransaction(func(tx *pg.Tx) error {
-		return a.db.Delete(line)
+	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
+		_, err := a.db.Model(line).WherePK().Delete()
+		return err
 	})
 
 	return err
@@ -326,9 +328,8 @@ func (a *Adapter) RemovePolicies(sec string, ptype string, rules [][]string) err
 		lines = append(lines, line)
 	}
 
-	err := a.db.RunInTransaction(func(tx *pg.Tx) error {
-		_, err := tx.Model(&lines).
-			Delete()
+	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
+		_, err := tx.Model(&lines).Delete()
 		return err
 	})
 
@@ -359,7 +360,7 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 		query = query.Where("v5 = ?", fieldValues[5-fieldIndex])
 	}
 
-	err := a.db.RunInTransaction(func(tx *pg.Tx) error {
+	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
 		_, err := query.Delete()
 		return err
 	})
@@ -484,7 +485,7 @@ func (a *Adapter) UpdateFilteredPolicies(sec string, ptype string, oldRules, new
 		newLines = append(newLines, line)
 	}
 
-	err := a.db.RunInTransaction(func(tx *pg.Tx) error {
+	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
 		_, err := tx.Model(&oldLines).Delete()
 		if err != nil {
 			return err
