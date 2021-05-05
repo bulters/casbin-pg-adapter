@@ -313,7 +313,7 @@ func (a *Adapter) AddPolicies(sec string, ptype string, rules [][]string) error 
 func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	line := savePolicyLine(ptype, rule)
 	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
-		_, err := a.db.Model(line).Delete()
+		_, err := a.db.Model(line).WherePK().Delete()
 		return err
 	})
 
@@ -329,8 +329,7 @@ func (a *Adapter) RemovePolicies(sec string, ptype string, rules [][]string) err
 	}
 
 	err := a.db.RunInTransaction(context.Background(), func(tx *pg.Tx) error {
-		_, err := tx.Model(&lines).
-			Delete()
+		_, err := tx.Model(&lines).Delete()
 		return err
 	})
 

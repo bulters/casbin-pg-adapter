@@ -7,5 +7,4 @@ require (
 	github.com/go-pg/pg/v10 v10.9.1
 	github.com/mmcloughlin/meow v0.0.0-20181112033425-871e50784daf
 	github.com/stretchr/testify v1.7.0
-	mellium.im/sasl v0.2.1 // indirect
 )
